@@ -239,6 +239,7 @@ void updateRoutingTable() {
       routingTable[i].next = previous;
       routingTable[i].cost = deciphered.path_cost + 1;
       address = routeDiscoveryTable[index].prev;
+      sent[index].path_cost = deciphered.path_cost + 1;
       flag = 0;
       break;
     } else if (routingTable[i].cost == 0) {
@@ -246,6 +247,7 @@ void updateRoutingTable() {
       routingTable[i].next = previous;
       routingTable[i].cost = deciphered.path_cost + 1;
       address = routeDiscoveryTable[routeIndex].prev;
+      sent[index].path_cost = deciphered.path_cost + 1;
       flag = 0;
       break;
     } else {
