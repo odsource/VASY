@@ -32,7 +32,7 @@ Note: In my testing it took about 15 seconds for the XBee to start reporting suc
 //#define DEST_ADDR 0x1111
 #define BROADCAST 0xFFFF
 
-const int ARRAY_SIZE = 200;
+const int ARRAY_SIZE = 150;
 XBee xbee = XBee();
 XBeeResponse response = XBeeResponse();
 // create reusable response objects for responses we expect to handle 
@@ -201,8 +201,8 @@ void setup() {
     rde.src = 0,
     rde.dest = 0,
     rde.prev = 0,
-    rde.forward_cost = 0,
-    rde.residual_cost = 200000
+    rde.forward_cost = 64000,
+    rde.residual_cost = 64000
   };
 
   for(int i = 0; i < ARRAY_SIZE; i++) {

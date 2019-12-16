@@ -32,7 +32,7 @@ Note: In my testing it took about 15 seconds for the XBee to start reporting suc
 #define DEST_ADDR 0x1111
 #define BROADCAST 0xFFFF
 
-const int ARRAY_SIZE = 200;
+const int ARRAY_SIZE = 150;
 XBee xbee = XBee();
 XBeeResponse response = XBeeResponse();
 // create reusable response objects for responses we expect to handle 
@@ -69,9 +69,9 @@ uint8_t payload[] = { 0, 0, 0, 0, 0, 0, 0, 0, 0};
 unsigned int pl[] = {0, 0, 0, 0};
 
 // with Series 1 you can use either 16-bit or 64-bit addressing
-
+int address = BROADCAST;
 // 16-bit addressing: Enter address of remote XBee, typically the coordinator
-Tx16Request tx = Tx16Request(BROADCAST, payload, sizeof(payload));
+Tx16Request tx = Tx16Request(address, payload, sizeof(payload));
 
 // 64-bit addressing: This is the SH + SL address of remote XBee
 // XBeeAddress64 addr64 = XBeeAddress64(0xFFFFFFFF, 0xFFFFFFFF);
@@ -84,6 +84,10 @@ int flag = 15;
 int srcAddress = LOCAL_SRC;
 int dstAddress = DEST_ADDR;
 int ident = 0;
+
+int routed = 0;
+int routeIndex = 0;
+int previous = 0;
 
 int ack_flag = 0;
 unsigned int i = 0;
@@ -100,6 +104,43 @@ int index = 0;
 uint8_t option = 0;
 uint8_t data[] = {0, 0, 0, 0, 0, 0, 0, 0, 0};
 sentMessages deciphered;
+
+void sendTx() {
+  // break down 10-bit reading into two bytes and place in payload
+  //Serial.print("SENDING AFTER RECEIVING\r\n");
+  xbee.send(tx);    
+  // after sending a tx request, we expect a status response
+  // wait up to 5 seconds for the status response
+  if (xbee.readPacket(5000)) {
+      //Serial.print("SENT PACKET WAS RECEIVED\r\n");
+      // got a response!
+      // should be a znet tx status              
+    if (xbee.getResponse().getApiId() == TX_STATUS_RESPONSE) {
+       // get the delivery status, the fifth byte
+         if (txStatus.getStatus() == SUCCESS) {
+            //Serial.print("SENT PACKET WAS RECEIVED SUCCESSFUL\r\n");
+            // success.  time to celebrate
+            //flashLed(statusLed, 5, 50);
+         } else {
+            //Serial.print("SENT PACKET FAILED\r\n");
+            // the remote XBee did not receive our packet. is it powered on?
+            //flashLed(errorLed, 3, 500);
+         }
+      }
+  } else if (xbee.getResponse().isError()) {
+    Serial.print("SEND ERROR RECEIVED:");
+    Serial.print(xbee.getResponse().getErrorCode());
+    //nss.print("Error reading packet.  Error code: ");  
+    //nss.println(xbee.getResponse().getErrorCode());
+    // or flash error led
+  } else {
+    Serial.print("TIMEOUT\r\n");
+    // local XBee did not provide a timely TX Status Response.  Radio is not configured properly or connected
+    //flashLed(errorLed, 2, 50);
+  }
+  flag = 15
+  
+}
 
 void decipherPayload(uint8_t payl[]) {
   // Flag
@@ -180,6 +221,39 @@ void flashLed(int pin, int times, int wait) {
     }
 }
 
+void addRoute() {
+  for (int i = 0; i < ARRAY_SIZE; i++) {
+    if (routingTable[i].cost == 0) {
+      routingTable[i].dest = deciphered.src;
+      routingTable[i].next = rx16.getRemoteAddress16();
+      routingTable[i].cost = deciphered.path_cost + 1;
+      break;
+    }
+  }
+}
+
+void updateRoutingTable() {
+  for (int i = 0; i < ARRAY_SIZE; i++) {
+    if (routingTable[i].dest == deciphered.src &&
+        routingTable[i].cost > deciphered.path_cost + 1) {
+      routingTable[i].next = previous;
+      routingTable[i].cost = deciphered.path_cost + 1;
+      address = routeDiscoveryTable[index].prev;
+      flag = 0;
+      break;
+    } else if (routingTable[i].cost == 0) {
+      routingTable[i].dest = deciphered.src;
+      routingTable[i].next = previous;
+      routingTable[i].cost = deciphered.path_cost + 1;
+      address = routeDiscoveryTable[routeIndex].prev;
+      flag = 0;
+      break;
+    } else {
+      flag = 15
+    }
+  }
+}
+
 void setup() {
   pinMode(statusLed, OUTPUT);
   pinMode(errorLed, OUTPUT);
@@ -203,8 +277,8 @@ void setup() {
     rde.src = 0,
     rde.dest = 0,
     rde.prev = 0,
-    rde.forward_cost = 0,
-    rde.residual_cost = 200000
+    rde.forward_cost = 64000,
+    rde.residual_cost = 64000
   };
 
   for(int i = 0; i < ARRAY_SIZE; i++) {
@@ -338,25 +412,64 @@ void loop() {
           if(pl[2] == LOCAL_SRC) {
             Serial.print("MEINS\r\n");
             for(int i = 0; i < ARRAY_SIZE; i++) {
-              if(sent[i].flag == 15) {
-                Serial.print("NEW MESSAGE\r\n");
-                index = i;
-                flag = 0;
-                break;
-              } else if((sent[i].flag == deciphered.flag) &&
-                  (sent[i].src == deciphered.src) &&
-                  (sent[i].dest == deciphered.dest) &&
-                  (sent[i].id == deciphered.id)) {
-                // flag == 1 bedeutet, dass das empfangene Paket bereits weitergeleitet wurde
-                flag = 1;
-                Serial.print("OLD MESSAGE\r\n");
-                break;
+              index = i;
+              // Leerer oder passender Eintrag in der RouteDiscoveryTable 
+              if (pl[0] == 2) {
+                if (routingTable[i].dest == deciphered.dest) {
+                  routed = 1;
+                  routeIndex = i;
+                }
+                if ((routeDiscoveryTable[i].src == 0) &&
+                    (routeDiscoveryTable[i].dest == 0)) {
+                  routeDiscoveryTable[i].src = deciphered.src;
+                  routeDiscoveryTable[i].dest = deciphered.dest;
+                  routeDiscoveryTable[i].prev = rx16.getRemoteAddress16();
+                  routeDiscoveryTable[i].forward_cost = deciphered.path_cost + 1;
+                  routeDiscoveryTable[i].residual_cost = 0;
+                  address = routeDiscoveryTable[i].prev;
+                  Serial.print("RREQ\r\n");
+                  flag = 0;
+                  break;
+                } else if (((routeDiscoveryTable[i].src == deciphered.src) &&
+                    (routeDiscoveryTable[i].dest == deciphered.dest))) {
+                  if (routeDiscoveryTable[i].forward_cost >= deciphered.path_cost+1) {
+                    routeDiscoveryTable[i].forward_cost = deciphered.path_cost + 1;
+                    routeDiscoveryTable[i].prev = rx16.getRemoteAddress16();
+                    routeDiscoveryTable[i].residual_cost = 0;
+                    address = routeDiscoveryTable[i].prev;
+                    Serial.print("RREQ\r\n");
+                    flag = 0;
+                    break;
+                  }
+                }
+              } else {
+                if(sent[i].flag == 15) {
+                  Serial.print("NEW MESSAGE\r\n");
+                  flag = 0;
+                  break;
+                } else if((sent[i].flag == deciphered.flag) &&
+                    (sent[i].src == deciphered.src) &&
+                    (sent[i].dest == deciphered.dest) &&
+                    (sent[i].id == deciphered.id)) {
+                  // flag == 1 bedeutet, dass das empfangene Paket bereits weitergeleitet wurde
+                  flag = 1;
+                  Serial.print("OLD MESSAGE\r\n");
+                  break;
+                }
               }
             }
             // flag auf 0 setzen um ACKNOWLEDGEMENT zu senden
             if(flag == 0) {
               sent[index] = deciphered;
               sent[index].flag = 1;
+              if (deciphered.flag == 2) {
+                sent[index].flag = 3;
+                sent[index].path_cost = routeDiscoveryTable[index].residual_cost;
+                address = rx16.getRemoteAddress16();
+                if (routed == 0) {
+                  addRoute();
+                }
+              }
               sent[index].src = LOCAL_SRC;
               sent[index].dest = deciphered.src;
               sent[index].id = ident;
@@ -372,8 +485,15 @@ void loop() {
           } else if(pl[0] == 0 || pl[0] == 1 || pl[0] == 2 || pl[0] == 3) {
             Serial.print("NICHT MEINS\r\n");
             for(int i = 0; i < ARRAY_SIZE; i++) {
+              index = i;
+              if (deciphered.flag == 2) {
+                flag = 0;
+                break;
+              } else if (deciphered.flag == 3) {
+                flag = 0;
+                break;
+              }
               if(sent[i].flag == 15) {
-                index = i;
                 flag = 0;
                 break;
               } else if((sent[i].flag == deciphered.flag) &&
@@ -390,24 +510,62 @@ void loop() {
               sent[index] = deciphered;
               if (pl[0] == 2) {
                 for (int i = 0; i < ARRAY_SIZE; i++) {
-                  // Leerer Eintrag in der RouteDiscoveryTable
+                  if (routingTable[i].dest == deciphered.dest) {
+                    routed = 1;
+                    routeIndex = i;
+                  }
+                  // Leerer Eintrag in der RouteDiscoveryTable 
                   if ((routeDiscoveryTable[i].src == 0) &&
                       (routeDiscoveryTable[i].dest == 0)) {
                     routeDiscoveryTable[i].src = deciphered.src;
                     routeDiscoveryTable[i].dest = deciphered.dest;
-                    routeDiscoveryTable[i].prev = rx16.getOption();
+                    routeDiscoveryTable[i].prev = rx16.getRemoteAddress16();
                     routeDiscoveryTable[i].forward_cost = deciphered.path_cost + 1;
-                    routeDiscoveryTable[i].residual_cost = deciphered.src;
+                    sent[index].flag = 2;
+                    sent[index].path_cost = routeDiscoveryTable[i].forward_cost;
+                    address = BROADCAST;
+                    /*
+                    if (routed == 1) {
+                      routeDiscoveryTable[i].residual_cost = routingTable[routeIndex].cost;
+                      address = rx16.getRemoteAddress16();
+                      sent[index].flag = 3;
+                      sent[index].path_cost = routeDiscoveryTable[i].residual_cost;
+                    }
+                    */
+                    Serial.print("RREQ\r\n");
                     break;
-                  // Passender Eintrag in der RouteDiscoveryTable gefunden
-                  } else if ((routeDiscoveryTable[i].src == deciphered.src) &&
-                      (routeDiscoveryTable[i].dest == deciphered.dest)) {
-                    if (routeDiscoveryTable[i]
+                  // Passender Eintrag in der RouteDiscoveryTable 
+                  } else if (((routeDiscoveryTable[i].src == deciphered.src) &&
+                      (routeDiscoveryTable[i].dest == deciphered.dest))) {
+                    if (routeDiscoveryTable[i].forward_cost >= deciphered.path_cost+1) {
+                      routeDiscoveryTable[i].forward_cost = deciphered.path_cost + 1;
+                      routeDiscoveryTable[i].prev = rx16.getRemoteAddress16();
+                      if (routed == 1) {
+                        routeDiscoveryTable[i].residual_cost = routingTable[routeIndex].cost;
+                        address = rx16.getRemoteAddress16();
+                        sent[index].flag = 3;
+                        sent[index].path_cost = routeDiscoveryTable[i].residual_cost;
+                      } else {
+                        address = BROADCAST;
+                        sent[index].path_cost = routeDiscoveryTable[i].forward_cost;
+                      }
+                      break;
+                      Serial.print("RREQ\r\n");
+                    }
+                    flag = 15;
                     break;
                   }
                 }
               } else if (pl[0] == 3) {
-                
+                for (int i = 0; i < ARRAY_SIZE; i++) {
+                  if (routeDiscoveryTable[i].dest == deciphered.src &&
+                      routeDiscoveryTable[i].src == deciphered.dest) {
+                    routeIndex = i;
+                    previous = rx16.getRemoteAddress16();
+                    updateRouteTable();
+                    break;
+                  }
+                }
               }
             }
           } 
@@ -416,40 +574,13 @@ void loop() {
           /* Prüfung der empfangenen Daten beendet */
           /***********************************************************/
           if (flag == 0) {
-            // break down 10-bit reading into two bytes and place in payload
-            Serial.print("SENDING AFTER RECEIVING\r\n");
             cipherPayload(index);
-            xbee.send(tx);    
-            // after sending a tx request, we expect a status response
-            // wait up to 5 seconds for the status response
-            if (xbee.readPacket(5000)) {
-                Serial.print("SENT PACKET WAS RECEIVED\r\n");
-                // got a response!
-                // should be a znet tx status              
-              if (xbee.getResponse().getApiId() == TX_STATUS_RESPONSE) {
-                 // get the delivery status, the fifth byte
-                   if (txStatus.getStatus() == SUCCESS) {
-                      Serial.print("SENT PACKET WAS RECEIVED SUCCESSFUL\r\n");
-                      // success.  time to celebrate
-                      //flashLed(statusLed, 5, 50);
-                   } else {
-                      Serial.print("SENT PACKET FAILED\r\n");
-                      // the remote XBee did not receive our packet. is it powered on?
-                      //flashLed(errorLed, 3, 500);
-                   }
-                }
-            } else if (xbee.getResponse().isError()) {
-              Serial.print("SEND ERROR RECEIVED:");
-              Serial.print(xbee.getResponse().getErrorCode());
-              //nss.print("Error reading packet.  Error code: ");  
-              //nss.println(xbee.getResponse().getErrorCode());
-              // or flash error led
-            } else {
-              Serial.print("TIMEOUT\r\n");
-              // local XBee did not provide a timely TX Status Response.  Radio is not configured properly or connected
-              //flashLed(errorLed, 2, 50);
-            }
+            sendTx();
           }
+          address = BROADCAST;
+          routed = 0;
+          routeIndex = 0;
+          previous = 0;
         /********************************************************************************/
                                   /* Senden der Daten fertig */
         /********************************************************************************/
