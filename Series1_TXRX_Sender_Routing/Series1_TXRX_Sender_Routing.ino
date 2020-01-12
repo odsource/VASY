@@ -498,6 +498,8 @@ void loop() {
                             flag = 0;
                             break;
                         }
+                        
+                        // Normal message
                         if(sent[i].flag == 15) {
                             flag = 0;
                             break;
@@ -564,8 +566,8 @@ void loop() {
                                     break;
                                 }
                             }
-                            ///////////////////////////////////////////////////////////////////////////////////////  
-                            //RREP
+                        ///////////////////////////////////////////////////////////////////////////////////////  
+                        //RREP
                         } else if (pl[0] == 3) {
                             for (int i = 0; i < ARRAY_SIZE; i++) {
                                 if (routeDiscoveryTable[i].dest == deciphered.src &&
