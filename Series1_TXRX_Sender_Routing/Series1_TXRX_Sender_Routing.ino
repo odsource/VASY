@@ -416,8 +416,9 @@ void loop() {
             for(int i = 0; i < ARRAY_SIZE; i++) {
               index = i;
               // Leerer oder passender Eintrag in der RouteDiscoveryTable 
+              // RREQ Message
               if (pl[0] == 2) {
-                if (routingTable[i].dest == deciphered.dest) {
+                if (routingTable[i].dest == deciphered.src) {
                   routed = 1;
                   routeIndex = i;
                 }
@@ -488,9 +489,12 @@ void loop() {
             Serial.print("NICHT MEINS\r\n");
             for(int i = 0; i < ARRAY_SIZE; i++) {
               index = i;
+              // RREQ
               if (deciphered.flag == 2) {
                 flag = 0;
                 break;
+                
+              //RREP
               } else if (deciphered.flag == 3) {
                 flag = 0;
                 break;
@@ -510,6 +514,9 @@ void loop() {
             // flag == 0 bedeutet, dass wir das empfangene Paket abspeichern und weiterleiten müssen
             if (flag == 0) {
               sent[index] = deciphered;
+
+              /////////////////////////////////////////////////////////////////
+              // RREQ
               if (pl[0] == 2) {
                 for (int i = 0; i < ARRAY_SIZE; i++) {
                   if (routingTable[i].dest == deciphered.dest) {
@@ -558,6 +565,8 @@ void loop() {
                     break;
                   }
                 }
+              ///////////////////////////////////////////////////////////////////////////////////////  
+              //RREP
               } else if (pl[0] == 3) {
                 for (int i = 0; i < ARRAY_SIZE; i++) {
                   if (routeDiscoveryTable[i].dest == deciphered.src &&
