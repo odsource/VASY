@@ -239,6 +239,7 @@ void addRoute() {
             routingTable[i].dest = deciphered.src;
             routingTable[i].next = rx16.getRemoteAddress16();
             routingTable[i].cost = deciphered.path_cost + 1;
+            printRouteTable(i);
             break;
         }
     }
@@ -323,26 +324,16 @@ void loop() {
         
             if (xbee.getResponse().getApiId() == RX_64_RESPONSE) {
                 xbee.getResponse().getRx64Response(rx64);
-                Serial.print("Was soll der Scheiss\r\n");
             } else {
-                Serial.print("RECEIVED RX16\r\n");
                 xbee.getResponse().getRx16Response(rx16);
-                //option = rx16.getOption();
-                //data = rx16.getData(0);
           
                 for(int i=0; i<9;i++) {
                     data[i] = rx16.getData(i);
-                }
-                Serial.print("DATA RECEIVED IN HEX: \r\n");
-                for (int i = 0; i < 9; i++) {
-                    Serial.print(data[i], HEX);
-                    Serial.print("\r\n");
                 }
                 decipherPayload(data);
                 /***********************************************************/
                 /* Prüfung der empfangenen Daten einfügen */
                 /***********************************************************/
-                Serial.print("\r\n");
                 Serial.print("RECEIVED FLAG: \r\n");
                 Serial.print(deciphered.flag);
                 Serial.print("\r\n");
@@ -357,7 +348,6 @@ void loop() {
                 Serial.print("\r\n");
                 Serial.print("RECEIVED PATH_COST: \r\n");
                 Serial.print(deciphered.path_cost);
-                Serial.print("\r\n");
                 Serial.print("\r\n");
                 
                 if(pl[2] == LOCAL_SRC) {
