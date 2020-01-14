@@ -26,13 +26,11 @@ Sends a TX16 or TX64 request with the value of analogRead(pin5) and checks the s
 Note: In my testing it took about 15 seconds for the XBee to start reporting success, so I've added a startup delay
 */
 
-#define LOCAL_SRC 0x1234
+#define LOCAL_SRC 0x1111
 //#define LOCAL_SRC 0x6666
-#define DEST_ADDR 0x6666
-//#define DEST_ADDR 0x1111
 #define BROADCAST 0xFFFF
 
-const int ARRAY_SIZE = 150;
+const int ARRAY_SIZE = 50;
 XBee xbee = XBee();
 XBeeResponse response = XBeeResponse();
 // create reusable response objects for responses we expect to handle 
@@ -82,7 +80,6 @@ TxStatusResponse txStatus = TxStatusResponse();
 
 int flag = 15;
 int srcAddress = LOCAL_SRC;
-int dstAddress = DEST_ADDR;
 int ident = 0;
 
 int routed = 0;
@@ -271,6 +268,31 @@ void updateRoutingTable() {
     }
 }
 
+void routeExists(int i){
+    if (routingTable[i].dest == deciphered.src) {
+        routed = 1;
+        routeIndex = i;
+    }
+}
+
+void newRouteDiscoveryTableEntry(int i) {
+    routeDiscoveryTable[i].src = deciphered.src;
+    routeDiscoveryTable[i].dest = deciphered.dest;
+    routeDiscoveryTable[i].prev = rx16.getRemoteAddress16();
+    routeDiscoveryTable[i].forward_cost = deciphered.path_cost + 1;
+    routeDiscoveryTable[i].residual_cost = 0;
+    address = routeDiscoveryTable[i].prev;
+    Serial.print("RREQ NEW ROUTEDISCOVERYTABLE ENTRY\r\n");
+}
+
+void updateRouteDiscoveryTableEntry(int i) {
+    routeDiscoveryTable[i].forward_cost = deciphered.path_cost + 1;
+    routeDiscoveryTable[i].prev = rx16.getRemoteAddress16();
+    routeDiscoveryTable[i].residual_cost = 0;
+    address = routeDiscoveryTable[i].prev;
+    Serial.print("RREQ EXISTING ROUTEDISCOVERYTABLE ENTRY UPDATED\r\n");
+}
+
 void setup() {
     pinMode(statusLed, OUTPUT);
     pinMode(errorLed, OUTPUT);
@@ -311,9 +333,7 @@ void setup() {
 }
 
 void loop() {
-    /************************************************************************/
-    /************************** ANFANG TEST SENDEN***************************/
-    /************************************************************************/
+    
     xbee.readPacket();
 
     if (xbee.getResponse().isAvailable()) {
@@ -358,37 +378,22 @@ void loop() {
                         // RREQ Message
                         if (pl[0] == 2) {
                             Serial.print("RREQ MESSAGE RECEIVED \r\n");
-                            if (routingTable[i].dest == deciphered.src) {
-                                routed = 1;
-                                routeIndex = i;
-                            }
+                            routeExists(i);
+                            
                             if ((routeDiscoveryTable[i].src == 0) &&
                                 (routeDiscoveryTable[i].dest == 0)) {
-                                routeDiscoveryTable[i].src = deciphered.src;
-                                routeDiscoveryTable[i].dest = deciphered.dest;
-                                routeDiscoveryTable[i].prev = rx16.getRemoteAddress16();
-                                routeDiscoveryTable[i].forward_cost = deciphered.path_cost + 1;
-                                routeDiscoveryTable[i].residual_cost = 0;
-                                address = routeDiscoveryTable[i].prev;
-                                Serial.print("RREQ NEW ROUTEDISCOVERYTABLE ENTRY\r\n");
+                                newRouteDiscoveryTableEntry(i);
                                 flag = 0;
                                 break;
                             } else if (((routeDiscoveryTable[i].src == deciphered.src) &&
                                 (routeDiscoveryTable[i].dest == deciphered.dest))) {
                                 if (routeDiscoveryTable[i].forward_cost >= deciphered.path_cost+1) {
-                                    routeDiscoveryTable[i].forward_cost = deciphered.path_cost + 1;
-                                    routeDiscoveryTable[i].prev = rx16.getRemoteAddress16();
-                                    routeDiscoveryTable[i].residual_cost = 0;
-                                    address = routeDiscoveryTable[i].prev;
-                                    Serial.print("RREQ EXISTING ROUTEDISCOVERYTABLE ENTRY UPDATED\r\n");
+                                    updateRouteDiscoveryTableEntry(i);
                                     flag = 0;
                                 }
                                 break;
                             }
                         } else if(pl[0] == 3) {
-                            Serial.print("ROUTE REPLY RECEIVED\r\n");
-                            addRoute();
-                            // TODO: SEND TO ROUTE
                             break;
                         }else {
                             if(sent[i].flag == 15) {
@@ -406,7 +411,7 @@ void loop() {
                             }
                         }
                     }
-                    // flag auf 0 setzen um ACKNOWLEDGEMENT zu senden
+                    // tx_process gets prepared
                     if(flag == 0) {
                         sent[index] = deciphered;
                         sent[index].flag = 1;
@@ -418,7 +423,6 @@ void loop() {
                                 addRoute();
                             } else if (routed == 1) {
                                 Serial.print("ROUTE EXISTS\r\n");
-                                sent[index].path_cost = routingTable[routeIndex].cost;
                                 address = routingTable[routeIndex].next;
                             }
                         }
@@ -435,7 +439,15 @@ void loop() {
                         ack_flag = 1;
                         Serial.print("ACKNOWLEDGEMENT RECEIVED\r\n");
                     }
-                    // Type 0..3 -> 0 = Normal, 1 = ACK, 2 = RREQ, 3 = RREP
+                    
+/*****************************************************************************************************************************************************/ 
+/*****************************************************************************************************************************************************/  
+/*****************************************************************************************************************************************************/  
+/*****************************************************************************************************************************************************/  
+/*****************************************************************************************************************************************************/  
+/*****************************************************************************************************************************************************/   
+                  
+                // Type 0..3 -> 0 = Normal, 1 = ACK, 2 = RREQ, 3 = RREP
                 } else if(pl[0] == 0 || pl[0] == 1 || pl[0] == 2 || pl[0] == 3) {
                     Serial.print("NICHT MEINS\r\n");
                     for(int i = 0; i < ARRAY_SIZE; i++) {
@@ -456,6 +468,7 @@ void loop() {
                             break;
                         }
                     }
+                    
                     // flag == 0 bedeutet, dass wir das empfangene Paket abspeichern und weiterleiten müssen
                     if (flag == 0) {
                         sent[index] = deciphered;
