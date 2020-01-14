@@ -32,7 +32,7 @@ Note: In my testing it took about 15 seconds for the XBee to start reporting suc
 #define DEST_ADDR 0x1111
 #define BROADCAST 0xFFFF
 
-const int ARRAY_SIZE = 50;
+const int ARRAY_SIZE = 12;
 XBee xbee = XBee();
 XBeeResponse response = XBeeResponse();
 // create reusable response objects for responses we expect to handle 
@@ -493,6 +493,16 @@ void loop() {
                             payload[6] = 0x0000 & 0xFF;
                             payload[7] = (0x0000 >> 8) & 0xFF;
                             payload[8] = 0x0000 & 0xFF;
+
+                            for(int i = 0; i < ARRAY_SIZE; i++) {
+                                if (sent[i].flag == 15) {
+                                    sent[i].flag == 0;
+                                    sent[i].flag == LOCAL_SRC;
+                                    sent[i].flag == DEST_ADDR;
+                                    sent[i].flag == 0;
+                                    sent[i].flag == 0;
+                                }
+                            }
                             
                             xbee.send(tx);
                             // after sending a tx request, we expect a status response

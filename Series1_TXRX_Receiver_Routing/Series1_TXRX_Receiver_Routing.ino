@@ -30,7 +30,7 @@ Note: In my testing it took about 15 seconds for the XBee to start reporting suc
 //#define LOCAL_SRC 0x6666
 #define BROADCAST 0xFFFF
 
-const int ARRAY_SIZE = 50;
+const int ARRAY_SIZE = 10;
 XBee xbee = XBee();
 XBeeResponse response = XBeeResponse();
 // create reusable response objects for responses we expect to handle 
