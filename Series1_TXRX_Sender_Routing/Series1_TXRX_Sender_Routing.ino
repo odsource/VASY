@@ -397,58 +397,6 @@ void loop() {
                   // local XBee did not provide a timely TX Status Response.  Radio is not configured properly or connected
                   //flashLed(errorLed, 2, 50);
                 }
-            } else {
-                Serial.print("SEND VIA ROUTING ENTRY\r\n");
-
-                for(int i = 0; i < ARRAY_SIZE; i++) {
-                    if(routingTable[i].dest == DEST_ADDR) {
-                        address = routingTable[i].next;
-                        break;
-                    }
-                }
-                Serial.print("ROUTING ENTRY NEXT HOP: \r\n");
-                Serial.print(address, HEX);
-                Serial.print("\r\n");
-                payload[0] = 0x00 & 0xFF;
-                payload[1] = (LOCAL_SRC >> 8) & 0xFF;
-                payload[2] = LOCAL_SRC & 0xFF;
-                payload[3] = (DEST_ADDR >> 8) & 0xFF;
-                payload[4] = DEST_ADDR & 0xFF;
-                payload[5] = (0x0000 >> 8) & 0xFF;
-                payload[6] = 0x0000 & 0xFF;
-                payload[7] = (0x0000 >> 8) & 0xFF;
-                payload[8] = 0x0000 & 0xFF;
-                
-                xbee.send(tx);
-                // after sending a tx request, we expect a status response
-                // wait up to 5 seconds for the status response
-                if (xbee.readPacket(5000)) {
-                    Serial.print("TEST: SENT PACKET WAS RECEIVED\r\n");
-                    // got a response!
-                    // should be a znet tx status              
-                  if (xbee.getResponse().getApiId() == TX_STATUS_RESPONSE) {
-                     // get the delivery status, the fifth byte
-                       if (txStatus.getStatus() == SUCCESS) {
-                          Serial.print("TEST: SENT PACKET WAS RECEIVED SUCCESSFUL\r\n");
-                          // success.  time to celebrate
-                          //flashLed(statusLed, 5, 50);
-                       } else {
-                          Serial.print("TEST: SENT PACKET FAILED\r\n");
-                          // the remote XBee did not receive our packet. is it powered on?
-                          //flashLed(errorLed, 3, 500);
-                       }
-                    }
-                } else if (xbee.getResponse().isError()) {
-                  Serial.print("TEST: SEND ERROR RECEIVED:");
-                  Serial.print(xbee.getResponse().getErrorCode());
-                  //nss.print("Error reading packet.  Error code: ");  
-                  //nss.println(xbee.getResponse().getErrorCode());
-                  // or flash error led
-                } else {
-                  Serial.print("TEST: TIMEOUT\r\n");
-                  // local XBee did not provide a timely TX Status Response.  Radio is not configured properly or connected
-                  //flashLed(errorLed, 2, 50);
-                }
             }
         }
     } 
@@ -520,6 +468,57 @@ void loop() {
                         } else if(pl[0] == 3) {
                             Serial.print("ROUTE REPLY RECEIVED\r\n");
                             addRoute();
+                            Serial.print("SEND VIA ROUTING ENTRY\r\n");
+            
+                            for(int i = 0; i < ARRAY_SIZE; i++) {
+                                if(routingTable[i].dest == DEST_ADDR) {
+                                    address = routingTable[i].next;
+                                    break;
+                                }
+                            }
+                            Serial.print("ROUTING ENTRY NEXT HOP: \r\n");
+                            Serial.print(address, HEX);
+                            Serial.print("\r\n");
+                            payload[0] = 0x00 & 0xFF;
+                            payload[1] = (LOCAL_SRC >> 8) & 0xFF;
+                            payload[2] = LOCAL_SRC & 0xFF;
+                            payload[3] = (DEST_ADDR >> 8) & 0xFF;
+                            payload[4] = DEST_ADDR & 0xFF;
+                            payload[5] = (0x0000 >> 8) & 0xFF;
+                            payload[6] = 0x0000 & 0xFF;
+                            payload[7] = (0x0000 >> 8) & 0xFF;
+                            payload[8] = 0x0000 & 0xFF;
+                            
+                            xbee.send(tx);
+                            // after sending a tx request, we expect a status response
+                            // wait up to 5 seconds for the status response
+                            if (xbee.readPacket(5000)) {
+                                Serial.print("TEST: SENT PACKET WAS RECEIVED\r\n");
+                                // got a response!
+                                // should be a znet tx status              
+                              if (xbee.getResponse().getApiId() == TX_STATUS_RESPONSE) {
+                                 // get the delivery status, the fifth byte
+                                   if (txStatus.getStatus() == SUCCESS) {
+                                      Serial.print("TEST: SENT PACKET WAS RECEIVED SUCCESSFUL\r\n");
+                                      // success.  time to celebrate
+                                      //flashLed(statusLed, 5, 50);
+                                   } else {
+                                      Serial.print("TEST: SENT PACKET FAILED\r\n");
+                                      // the remote XBee did not receive our packet. is it powered on?
+                                      //flashLed(errorLed, 3, 500);
+                                   }
+                                }
+                            } else if (xbee.getResponse().isError()) {
+                              Serial.print("TEST: SEND ERROR RECEIVED:");
+                              Serial.print(xbee.getResponse().getErrorCode());
+                              //nss.print("Error reading packet.  Error code: ");  
+                              //nss.println(xbee.getResponse().getErrorCode());
+                              // or flash error led
+                            } else {
+                              Serial.print("TEST: TIMEOUT\r\n");
+                              // local XBee did not provide a timely TX Status Response.  Radio is not configured properly or connected
+                              //flashLed(errorLed, 2, 50);
+                            }
                             break;
                         }else {
                             if(sent[i].flag == 15) {
